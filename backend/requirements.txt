@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+python-dotenv
+requests
+PyJWT
+SQLAlchemy
+psycopg2-binary
+PyPDF2
+openai
+azure-storage-blob
+celery
+redis
+pytesseract
+Pillow
+beautifulsoup4
+loguru
