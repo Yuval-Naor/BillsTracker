@@ -1,10 +1,16 @@
 import React, { useState } from 'react';
 import { Box, TextField, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 
+// Make sure this Bill interface matches the one in Dashboard.tsx
 interface Bill {
+  id: number;
   vendor: string | null;
   date: string | null;
+  due_date: string | null;
+  amount: number | null;
+  currency: string | null;
   category: string | null;
+  status: string | null;
 }
 
 interface FiltersProps {
@@ -17,10 +23,10 @@ const Filters: React.FC<FiltersProps> = ({ bills, onFilter }) => {
   const [month, setMonth] = useState("");
   const [category, setCategory] = useState("");
 
-  const vendors = Array.from(new Set(bills.map(b => b.vendor).filter(Boolean)));
+  const vendors = Array.from(new Set(bills.map(b => b.vendor).filter((v): v is string => v !== null)));
   const categories = Array.from(new Set(bills.map(b => b.category).filter(Boolean)));
 
-  const handleFilterChange = () => {
+  const handleFilterChange = React.useCallback(() => {
     const filtered = bills.filter(b => {
       const matchVendor = vendor ? b.vendor === vendor : true;
       const matchCategory = category ? b.category === category : true;
@@ -28,7 +34,7 @@ const Filters: React.FC<FiltersProps> = ({ bills, onFilter }) => {
       return matchVendor && matchCategory && matchMonth;
     });
     onFilter(filtered);
-  };
+  }, [bills, vendor, category, month, onFilter]);
 
   return (
     <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
@@ -48,7 +54,7 @@ const Filters: React.FC<FiltersProps> = ({ bills, onFilter }) => {
         >
           <MenuItem value=""><em>All</em></MenuItem>
           {vendors.map(v => (
-            <MenuItem key={v} value={v}>{v}</MenuItem>
+            <MenuItem key={v} value={v || ''}>{v || 'Unknown Vendor'}</MenuItem>
           ))}
         </Select>
       </FormControl>
@@ -61,7 +67,7 @@ const Filters: React.FC<FiltersProps> = ({ bills, onFilter }) => {
         >
           <MenuItem value=""><em>All</em></MenuItem>
           {categories.map(c => (
-            <MenuItem key={c} value={c}>{c}</MenuItem>
+            <MenuItem key={c || 'unknown'} value={c || ''}>{c || 'Unknown Category'}</MenuItem>
           ))}
         </Select>
       </FormControl>

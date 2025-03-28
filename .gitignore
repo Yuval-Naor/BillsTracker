@@ -1,0 +1,10 @@
+
+# node modules
+frontend/node_modules/
+
+# build files
+frontend/build/
+
+# logs
+*.log
+

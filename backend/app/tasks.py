@@ -36,6 +36,10 @@ def sync_gmail_inbox(user_id: int):
     query = 'has:attachment OR subject:(bill OR invoice OR חשבונית OR קבלה)'
     try:
         message_ids = gmail_service.list_message_ids(access_token, query=query, max_results=50)
+        if not message_ids:
+            print(f"No messages found for {user.email}")
+            db.close()
+            return "No messages found"
     except Exception as e:
         print(f"Gmail API error for {user.email}: {e}")
         db.close()

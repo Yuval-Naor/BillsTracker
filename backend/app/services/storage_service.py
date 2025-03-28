@@ -15,5 +15,5 @@ def upload_attachment(blob_name: str, data: bytes) -> str:
         blob_url = f"{account_url}/{settings.AZURE_BLOB_CONTAINER}/{blob_name}"
         return blob_url
     except Exception as e:
-        print("Blob upload failed:", e)
-        return ""
+        print(f"Blob upload failed for {blob_name}: {e}")
+        return None

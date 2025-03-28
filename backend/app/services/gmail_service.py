@@ -15,7 +15,10 @@ def refresh_access_token(refresh_token: str) -> str:
     resp = requests.post("https://oauth2.googleapis.com/token", data=data)
     resp.raise_for_status()
     token_info = resp.json()
-    return token_info.get("access_token")
+    access_token = token_info.get("access_token")
+    if not access_token:
+        raise Exception("Failed to refresh access token")
+    return access_token
 
 def list_message_ids(access_token: str, query: str = None, max_results: int = 50):
     url = f"{GMAIL_API_BASE}/users/me/messages"

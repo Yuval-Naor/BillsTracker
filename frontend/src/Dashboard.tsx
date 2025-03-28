@@ -33,11 +33,14 @@ const Dashboard: React.FC = () => {
   };
 
   const handleSync = async () => {
+    setLoading(true);
     try {
       await apiPost('/api/sync');
       setTimeout(fetchBills, 5000);
     } catch (error) {
       console.error("Sync failed:", error);
+    } finally {
+      setLoading(false);
     }
   };
 

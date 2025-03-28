@@ -1,6 +1,11 @@
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str
@@ -24,10 +29,14 @@ class Settings(BaseSettings):
         case_sensitive = True
 
     def load_secrets_from_keyvault(self):
-        credential = DefaultAzureCredential()
-        client = SecretClient(vault_url=self.KEY_VAULT_URL, credential=credential)
-        self.JWT_SECRET = client.get_secret("JWT_SECRET").value
-        # Load other secrets similarly
+        if os.getenv("USE_KEYVAULT", "false").lower() == "true":
+            credential = DefaultAzureCredential()
+            client = SecretClient(vault_url=self.KEY_VAULT_URL, credential=credential)
+            try:
+                self.JWT_SECRET = client.get_secret("JWT_SECRET").value
+            except Exception as e:
+                print(f"Failed to load JWT_SECRET from Key Vault: {e}")
+            # Load other secrets similarly with error handling
 
 settings = Settings()
 settings.load_secrets_from_keyvault()

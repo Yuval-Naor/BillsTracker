@@ -6,10 +6,14 @@ RUN apt-get update && apt-get install -y \
     libpq-dev build-essential poppler-utils tesseract-ocr tesseract-ocr-heb \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY backend/requirements.txt /app/requirements.txt
+COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install pydantic-settings azure-identity
 
-COPY backend/app /app/app
+COPY app /app/app
+
+# Add .env file to the Docker image for local development
+COPY .env /app/.env
 
 EXPOSE 8000
 

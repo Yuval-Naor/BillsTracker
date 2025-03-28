@@ -13,7 +13,7 @@ def extract_bill_data(bill_text: str) -> dict:
         "Extract the following fields: vendor, date, due_date, amount, currency, category, status. "
         "Output only a JSON object with these keys."
     )
-    user_prompt = f"Invoice Text:\n"""\n{bill_text}\n"""\nExtract the data as JSON."
+    user_prompt = f"""Invoice Text:\n{bill_text}\nExtract the data as JSON."""
     try:
         response = openai.ChatCompletion.create(
             engine=settings.AZURE_OPENAI_ENGINE,

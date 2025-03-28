@@ -12,6 +12,9 @@ const GoogleCallback: React.FC = () => {
     if (token) {
       localStorage.setItem('token', token);
       navigate('/');
+    } else {
+      console.error("Token missing in callback URL");
+      navigate('/login');
     }
   }, [location.search, navigate]);
 

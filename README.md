@@ -102,18 +102,19 @@ az acr create --resource-group BillsTrackerRG --name billstrackeracr --sku Basic
 
 - **Azure Database for PostgreSQL**:
 ```sh
-az postgres flexible-server create --resource-group BillsTrackerRG --name billsdb --admin-user <dbuser> --admin-password <secure-password>
+az postgres flexible-server create --resource-group  gmail-bill-scanner-rg --name billsdb --admin-user <dbuser> --admin-password <secure-password>
 ```
 
 - **Azure Redis Cache**:
 ```sh
-az redis create --name billsredis --resource-group BillsTrackerRG --location eastus --sku Basic --vm-size c0
+az redis create --name billsredis --resource-group  gmail-bill-scanner-rg --location eastus --sku Basic --vm-size c0
 ```
 
 - **Azure Blob Storage**:
 ```sh
-az storage account create --name billsstorage --resource-group BillsTrackerRG --location eastus --sku Standard_LRS
-az storage container create --name billscontainer --account-name billsstorage
+az storage account create --name yuvalnbillsstorage --resource-group gmail-bill-scanner-rg
+ --location eastus --sku Standard_LRS
+az storage container create --name billscontainer --account-name yuvalnbillsstorage
 ```
 
 - **Azure OpenAI Service**:
@@ -121,16 +122,16 @@ az storage container create --name billscontainer --account-name billsstorage
 
 - **Azure Key Vault** (for secure secrets storage):
 ```sh
-az keyvault create --name BillsKeyVault --resource-group BillsTrackerRG --location eastus
+az keyvault create --name BillscannersKeyVault --resource-group  gmail-bill-scanner-rg --location eastus
 ```
 
 Store secrets securely in Key Vault:
 ```sh
-az keyvault secret set --vault-name BillsKeyVault --name GOOGLE-CLIENT-ID --value "<your-google-client-id>"
-az keyvault secret set --vault-name BillsKeyVault --name GOOGLE-CLIENT-SECRET --value "<your-google-client-secret>"
-az keyvault secret set --vault-name BillsKeyVault --name JWT-SECRET --value "<secure-random-secret>"
-az keyvault secret set --vault-name BillsKeyVault --name AZURE-OPENAI-KEY --value "<your-openai-key>"
-az keyvault secret set --vault-name BillsKeyVault --name AZURE-BLOB-CONNECTION-STRING --value "<your-blob-connection-string>"
+az keyvault secret set --vault-name BillscannersKeyVault --name GOOGLE-CLIENT-ID --value "76690247848-of8kad73k8qr4eqa9immidpqoledkrgt.apps.googleusercontent.com"
+az keyvault secret set --vault-name BillscannersKeyVault --name GOOGLE-CLIENT-SECRET --value "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"
+az keyvault secret set --vault-name BillscannersKeyVault --name JWT-SECRET --value "p6nPA0mFOFxck567sz86t5Nvm9N3hfaF_ENdy8tRdo"
+az keyvault secret set --vault-name BillscannersKeyVault --name AZURE-OPENAI-KEY --value "DBVv3lGCTjANORSUtR7LX2dAKB6c4V2i8vbGCNveN8p6s7tkUkz9JQQJ99BCACYeBjFXJ3w3AAABACOGZ4I5"
+az keyvault secret set --vault-name BillscannersKeyVault --name AZURE-BLOB-CONNECTION-STRING --value "DefaultEndpointsProtocol=https;AccountName=yuvalnbillsstorage;AccountKey=KzviChVnmTPGH0HHXIaoHUbzSka+SM0SGkqAfpJdyRRfHs8w2sGEuVeuyp72aBQB4MSp/8EInidh+AStBTqpRw==;EndpointSuffix=core.windows.net"
 ```
 
 ### Step 3: Configure GitHub Actions for CI/CD
