@@ -62,15 +62,36 @@ This command will:
 - Run Celery worker for background tasks.
 - Build and run the frontend at `http://localhost:3000`.
 
-### Step 2: Access the Application
+### Step 3: Access the Application
 - Open your browser and navigate to `http://localhost:3000`.
 - Click "Sign in with Google" to authenticate.
 
-### Step 2: Testing the Application
+### Step 4: Testing the Application
 - After login, the frontend will redirect you to Google's OAuth page.
 - After successful login, you'll be redirected back to the frontend dashboard.
 - Click "Sync Bills" to trigger the Gmail synchronization task.
 - Bills will appear in your dashboard after processing.
+
+### Troubleshooting
+If you encounter errors when running the application:
+
+1. **JWT Token Error**: If you see `InvalidSubjectError: Subject must be a string` in the logs, it could be because:
+   - You might have an old token stored in the browser
+   - Solution: Clear your browser storage (localStorage) or try in Incognito mode
+
+2. **Database Connection Error**: If the backend can't connect to Postgres:
+   - Make sure Docker Compose is running all services
+   - Verify DATABASE_URL in the .env file
+   - Solution: Try `docker-compose down -v` and `docker-compose up --build` to recreate volumes
+
+3. **Google OAuth Error**: If Google login fails:
+   - Verify your GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are correct
+   - Make sure the redirect URI is properly configured in Google Console
+
+4. **No Bills Appearing**: If no bills appear after syncing:
+   - Check Celery logs for any errors in bill processing
+   - Verify the Google account has bills/invoices in Gmail
+   - OpenAI integration might need valid API keys
 
 ---
 

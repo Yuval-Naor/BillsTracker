@@ -1,10 +1,14 @@
-import openai, json
+from openai import AzureOpenAI
+import json
 from app.config import settings
+from loguru import logger
 
-openai.api_type = "azure"
-openai.api_base = settings.AZURE_OPENAI_ENDPOINT
-openai.api_key = settings.AZURE_OPENAI_KEY
-openai.api_version = settings.AZURE_OPENAI_API_VERSION
+# Initialize Azure OpenAI client
+client = AzureOpenAI(
+    azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+    api_key=settings.AZURE_OPENAI_KEY,
+    api_version=settings.AZURE_OPENAI_API_VERSION
+)
 
 def extract_bill_data(bill_text: str) -> dict:
     system_prompt = (
@@ -15,8 +19,9 @@ def extract_bill_data(bill_text: str) -> dict:
     )
     user_prompt = f"""Invoice Text:\n{bill_text}\nExtract the data as JSON."""
     try:
-        response = openai.ChatCompletion.create(
-            engine=settings.AZURE_OPENAI_ENGINE,
+        # New API call format for OpenAI >= 1.0.0
+        response = client.chat.completions.create(
+            model=settings.AZURE_OPENAI_ENGINE,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -24,9 +29,10 @@ def extract_bill_data(bill_text: str) -> dict:
             temperature=0.0,
             max_tokens=500
         )
-        content = response['choices'][0]['message']['content']
+        # New response structure
+        content = response.choices[0].message.content
         data = json.loads(content.strip())
         return data
     except Exception as e:
-        print("OpenAI extraction error:", e)
+        logger.error(f"OpenAI extraction error: {e}")
         return {}
