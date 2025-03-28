@@ -16,4 +16,4 @@ class BillOut(BillBase):
     user_id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True  # Updated from orm_mode

@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends
 from datetime import datetime
+import traceback
 from app.auth import get_current_user
 from app.database import SessionLocal
 from app import models, schemas
 from app.services import gmail_service, pdf_service, image_service, html_service, openai_service, storage_service
 from app.celery_app import celery_app
+from loguru import logger
 
 router = APIRouter()
 
@@ -22,28 +24,45 @@ def list_bills(current_user: models.User = Depends(get_current_user)):
 
 @celery_app.task(name="app.tasks.sync_gmail_inbox")
 def sync_gmail_inbox(user_id: int):
+    logger.info(f"Starting Gmail sync for user ID {user_id}")
     db = SessionLocal()
     user = db.query(models.User).get(user_id)
     if not user:
+        logger.error(f"User ID {user_id} not found in database")
         db.close()
         return "User not found"
-    try:
-        access_token = gmail_service.refresh_access_token(user.google_refresh_token)
-    except Exception as e:
-        print(f"Token refresh failed for {user.email}: {e}")
+    
+    # Check if refresh token exists
+    if not user.google_refresh_token:
+        logger.error(f"No refresh token stored for user {user.email}")
         db.close()
-        return "Token refresh failed"
+        return "No refresh token available"
+    
+    try:
+        logger.info(f"Refreshing access token for {user.email}")
+        access_token = gmail_service.refresh_access_token(user.google_refresh_token)
+        logger.info(f"Successfully obtained access token")
+    except Exception as e:
+        logger.error(f"Token refresh failed for {user.email}: {str(e)}")
+        logger.error(traceback.format_exc())
+        db.close()
+        return f"Token refresh failed: {str(e)}"
+    
     query = 'has:attachment OR subject:(bill OR invoice OR חשבונית OR קבלה)'
     try:
+        logger.info(f"Fetching messages with query: {query}")
         message_ids = gmail_service.list_message_ids(access_token, query=query, max_results=50)
         if not message_ids:
-            print(f"No messages found for {user.email}")
+            logger.info(f"No messages found for {user.email}")
             db.close()
             return "No messages found"
+        logger.info(f"Found {len(message_ids)} messages")
     except Exception as e:
-        print(f"Gmail API error for {user.email}: {e}")
+        error_msg = f"Gmail API error for {user.email}: {str(e)}"
+        logger.error(error_msg)
+        logger.error(traceback.format_exc())
         db.close()
-        return "Gmail API error"
+        return f"Gmail API error: {str(e)}"
     
     for msg_id in message_ids:
         if db.query(models.Bill).filter_by(user_id=user.id, message_id=msg_id).first():
@@ -51,7 +70,8 @@ def sync_gmail_inbox(user_id: int):
         try:
             message = gmail_service.get_message(access_token, msg_id)
         except Exception as e:
-            print(f"Failed to fetch message {msg_id}: {e}")
+            logger.error(f"Failed to fetch message {msg_id}: {str(e)}")
+            logger.error(traceback.format_exc())
             continue
         full_text_segments = []
 
@@ -72,7 +92,8 @@ def sync_gmail_inbox(user_id: int):
             try:
                 data = gmail_service.download_attachment(access_token, msg_id, att_id)
             except Exception as e:
-                print(f"Attachment download failed for {filename}: {e}")
+                logger.error(f"Attachment download failed for {filename}: {str(e)}")
+                logger.error(traceback.format_exc())
                 continue
             if filename.lower().endswith(".pdf") or mime == "application/pdf":
                 pdf_text = pdf_service.extract_text_from_pdf(data)
@@ -93,7 +114,8 @@ def sync_gmail_inbox(user_id: int):
                     html_text = html_service.extract_text_from_html(resp.text)
                     full_text_segments.append(html_text)
             except Exception as e:
-                print(f"Failed to fetch URL {url}: {e}")
+                logger.error(f"Failed to fetch URL {url}: {str(e)}")
+                logger.error(traceback.format_exc())
                 continue
 
         if not full_text_segments:

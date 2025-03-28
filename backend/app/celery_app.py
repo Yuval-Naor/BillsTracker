@@ -8,6 +8,7 @@ celery_app.conf.update(
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
+    broker_connection_retry_on_startup=True,  # Added to fix warning
 )
 
 # Ensure tasks are imported to register them with Celery
