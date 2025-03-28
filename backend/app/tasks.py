@@ -7,6 +7,7 @@ from app import models, schemas
 from app.services import gmail_service, pdf_service, image_service, html_service, openai_service, storage_service
 from app.celery_app import celery_app
 from loguru import logger
+from typing import List, Dict, Any
 
 router = APIRouter()
 
@@ -64,81 +65,163 @@ def sync_gmail_inbox(user_id: int):
         db.close()
         return f"Gmail API error: {str(e)}"
     
-    for msg_id in message_ids:
-        if db.query(models.Bill).filter_by(user_id=user.id, message_id=msg_id).first():
-            continue
-        try:
-            message = gmail_service.get_message(access_token, msg_id)
-        except Exception as e:
-            logger.error(f"Failed to fetch message {msg_id}: {str(e)}")
-            logger.error(traceback.format_exc())
-            continue
-        full_text_segments = []
-
-        payload = message.get("payload", {})
-        if payload.get("body", {}).get("data"):
-            import base64
-            body_text = base64.urlsafe_b64decode(payload["body"]["data"] + "==").decode("utf-8", errors="ignore")
-            full_text_segments.append(body_text)
-            urls = gmail_service.extract_urls_from_text(body_text)
-        else:
-            urls = []
-
-        attachments = gmail_service.get_attachments_info(message)
-        for attach in attachments:
-            att_id = attach["attachmentId"]
-            filename = attach["filename"]
-            mime = attach["mimeType"]
+    # First, filter out already processed messages
+    existing_message_ids = {
+        result[0] for result in 
+        db.query(models.Bill.message_id).filter(
+            models.Bill.user_id==user.id, 
+            models.Bill.message_id.in_(message_ids)
+        ).all()
+    }
+    
+    new_message_ids = [msg_id for msg_id in message_ids if msg_id not in existing_message_ids]
+    logger.info(f"Found {len(new_message_ids)} new messages to process")
+    
+    if not new_message_ids:
+        db.close()
+        return "No new messages to process"
+    
+    # Process messages in batches to reduce API calls
+    batch_size = 5
+    message_batches = [new_message_ids[i:i+batch_size] for i in range(0, len(new_message_ids), batch_size)]
+    
+    for batch_index, message_batch in enumerate(message_batches):
+        logger.info(f"Processing message batch {batch_index+1}/{len(message_batches)}")
+        
+        # Collect text from messages in the batch
+        batch_texts = []
+        batch_metadata = []
+        
+        for msg_id in message_batch:
             try:
-                data = gmail_service.download_attachment(access_token, msg_id, att_id)
+                message = gmail_service.get_message(access_token, msg_id)
+                full_text_segments = []
+                
+                # Extract message body
+                payload = message.get("payload", {})
+                if payload.get("body", {}).get("data"):
+                    import base64
+                    body_text = base64.urlsafe_b64decode(payload["body"]["data"] + "==").decode("utf-8", errors="ignore")
+                    full_text_segments.append(body_text)
+                    urls = gmail_service.extract_urls_from_text(body_text)
+                else:
+                    urls = []
+                
+                # Process attachments
+                attachments = gmail_service.get_attachments_info(message)
+                for attach in attachments:
+                    att_id = attach["attachmentId"]
+                    filename = attach["filename"]
+                    mime = attach["mimeType"]
+                    try:
+                        data = gmail_service.download_attachment(access_token, msg_id, att_id)
+                    except Exception as e:
+                        logger.error(f"Attachment download failed for {filename}: {str(e)}")
+                        continue
+                    
+                    if filename.lower().endswith(".pdf") or mime == "application/pdf":
+                        pdf_text = pdf_service.extract_text_from_pdf(data)
+                        if pdf_text:
+                            full_text_segments.append(pdf_text)
+                    elif mime in ["image/jpeg", "image/png"]:
+                        ocr_text = image_service.extract_text_from_image(data)
+                        if ocr_text:
+                            full_text_segments.append(ocr_text)
+                
+                # Process URLs in the email
+                for url in urls:
+                    try:
+                        import requests
+                        resp = requests.get(url, timeout=10)
+                        content_type = resp.headers.get("Content-Type", "")
+                        if "application/pdf" in content_type or url.lower().endswith(".pdf"):
+                            pdf_text = pdf_service.extract_text_from_pdf(resp.content)
+                            if pdf_text:
+                                full_text_segments.append(pdf_text)
+                        elif "text/html" in content_type:
+                            html_text = html_service.extract_text_from_html(resp.text)
+                            if html_text:
+                                full_text_segments.append(html_text)
+                    except Exception as e:
+                        logger.error(f"Failed to fetch URL {url}: {str(e)}")
+                        continue
+                
+                if full_text_segments:
+                    combined_text = "\n".join(full_text_segments)
+                    batch_texts.append(combined_text)
+                    batch_metadata.append({"message_id": msg_id, "paid": detect_paid_status(combined_text)})
+                
             except Exception as e:
-                logger.error(f"Attachment download failed for {filename}: {str(e)}")
+                logger.error(f"Error processing message {msg_id}: {str(e)}")
                 logger.error(traceback.format_exc())
-                continue
-            if filename.lower().endswith(".pdf") or mime == "application/pdf":
-                pdf_text = pdf_service.extract_text_from_pdf(data)
-                full_text_segments.append(pdf_text)
-            elif mime in ["image/jpeg", "image/png"]:
-                ocr_text = image_service.extract_text_from_image(data)
-                full_text_segments.append(ocr_text)
-
-        for url in urls:
+        
+        # If we have texts to process, use batch processing
+        if batch_texts:
             try:
-                import requests
-                resp = requests.get(url, timeout=10)
-                content_type = resp.headers.get("Content-Type", "")
-                if "application/pdf" in content_type or url.lower().endswith(".pdf"):
-                    pdf_text = pdf_service.extract_text_from_pdf(resp.content)
-                    full_text_segments.append(pdf_text)
-                elif "text/html" in content_type:
-                    html_text = html_service.extract_text_from_html(resp.text)
-                    full_text_segments.append(html_text)
+                logger.info(f"Sending batch of {len(batch_texts)} texts to OpenAI for analysis")
+                bill_data_batch = openai_service.extract_multiple_bills_data(batch_texts)
+                
+                # Create bills from extracted data
+                for i, bill_data in enumerate(bill_data_batch):
+                    if i >= len(batch_metadata):
+                        logger.warning(f"More bill data returned than expected. Skipping extra data.")
+                        break
+                        
+                    metadata = batch_metadata[i]
+                    
+                    try:
+                        bill = models.Bill(
+                            user_id=user.id,
+                            message_id=metadata["message_id"],
+                            vendor=bill_data.get("vendor"),
+                            date=bill_data.get("date"),
+                            due_date=bill_data.get("due_date"),
+                            amount=bill_data.get("amount"),  # Now properly validated
+                            currency=bill_data.get("currency"),
+                            category=bill_data.get("category"),
+                            status=bill_data.get("status"),
+                            blob_name="",
+                            paid=metadata["paid"]
+                        )
+                        db.add(bill)
+                        db.commit()
+                    except Exception as e:
+                        logger.error(f"Error saving bill to database: {str(e)}")
+                        db.rollback()  # Roll back the failed transaction
+                
             except Exception as e:
-                logger.error(f"Failed to fetch URL {url}: {str(e)}")
+                logger.error(f"Batch processing failed: {str(e)}")
                 logger.error(traceback.format_exc())
-                continue
-
-        if not full_text_segments:
-            continue
-        combined_text = "\n".join(full_text_segments)
-        bill_data = openai_service.extract_bill_data(combined_text)
-        if not bill_data:
-            continue
-        bill = models.Bill(
-            user_id=user.id,
-            message_id=msg_id,
-            vendor=bill_data.get("vendor"),
-            date=bill_data.get("date"),
-            due_date=bill_data.get("due_date"),
-            amount=bill_data.get("amount"),
-            currency=bill_data.get("currency"),
-            category=bill_data.get("category"),
-            status=bill_data.get("status"),
-            blob_name=""
-        )
-        bill.paid = detect_paid_status(combined_text)
-        db.add(bill)
-        db.commit()
+                
+                # Fallback to individual processing if batch fails
+                for i, text in enumerate(batch_texts):
+                    if i >= len(batch_metadata):
+                        continue
+                        
+                    try:
+                        metadata = batch_metadata[i]
+                        bill_data = openai_service.extract_bill_data(text)
+                        
+                        if bill_data:
+                            bill = models.Bill(
+                                user_id=user.id,
+                                message_id=metadata["message_id"],
+                                vendor=bill_data.get("vendor"),
+                                date=bill_data.get("date"),
+                                due_date=bill_data.get("due_date"),
+                                amount=bill_data.get("amount"),
+                                currency=bill_data.get("currency"),
+                                category=bill_data.get("category"),
+                                status=bill_data.get("status"),
+                                blob_name="",
+                                paid=metadata["paid"]
+                            )
+                            db.add(bill)
+                            db.commit()
+                    except Exception as inner_e:
+                        logger.error(f"Individual bill processing failed: {str(inner_e)}")
+                        db.rollback()
+    
     db.close()
     return "Sync completed"
 
