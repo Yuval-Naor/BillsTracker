@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { Container, Tabs, Tab, Box, Typography, Button, Grid } from '@mui/material';
 import { apiGet, apiPost } from './api';
 import Filters from './Filters';
 import Charts from './Charts';
+import { AuthContext } from './App';
 
 interface Bill {
   id: number;
@@ -19,6 +20,7 @@ const Dashboard: React.FC = () => {
   const [bills, setBills] = useState<Bill[]>([]);
   const [tabValue, setTabValue] = useState(0);
   const [loading, setLoading] = useState(false);
+  const { setUserInfo } = useContext(AuthContext);
 
   const fetchBills = async () => {
     setLoading(true);
@@ -29,6 +31,21 @@ const Dashboard: React.FC = () => {
       console.error("Failed to fetch bills:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // This function ensures we update user info if it's not already set
+  const ensureUserInfo = async () => {
+    // Only fetch if we're missing info from localStorage
+    if (!localStorage.getItem('userName') || !localStorage.getItem('userEmail')) {
+      try {
+        const userData = await apiGet('/api/user/me');
+        if (userData) {
+          setUserInfo(userData.name || '', userData.email || '');
+        }
+      } catch (error) {
+        console.error("Failed to fetch user info:", error);
+      }
     }
   };
 
@@ -46,6 +63,7 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchBills();
+    ensureUserInfo();
   }, []);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
