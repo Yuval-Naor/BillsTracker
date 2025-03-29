@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     AZURE_OPENAI_ENDPOINT: str
     AZURE_OPENAI_KEY: str
     AZURE_OPENAI_ENGINE: str
-    AZURE_OPENAI_API_VERSION: str = "2024-02-01"
+    AZURE_OPENAI_API_VERSION: str
     AZURE_BLOB_CONNECTION_STRING: str
     AZURE_BLOB_CONTAINER: str
     FRONTEND_URL: str
@@ -56,6 +56,14 @@ class Settings(BaseSettings):
                     print("Warning: AZURE_BLOB_CONNECTION_STRING is empty in Key Vault.")
             except Exception as e:
                 print(f"Failed to load AZURE_BLOB_CONNECTION_STRING from Key Vault: {e}")
+            try:
+                azure_openai_api_version = client.get_secret("AZURE_OPENAI_API_VERSION").value
+                if azure_openai_api_version:
+                    self.AZURE_OPENAI_API_VERSION = azure_openai_api_version
+                else:
+                    print("Warning: AZURE_OPENAI_API_VERSION is empty in Key Vault.")
+            except Exception as e:
+                print(f"Failed to load AZURE_OPENAI_API_VERSION from Key Vault: {e}")
             # Load other secrets similarly with error handling
 
 settings = Settings()
