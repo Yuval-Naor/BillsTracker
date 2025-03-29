@@ -23,6 +23,14 @@ def list_bills(current_user: models.User = Depends(get_current_user)):
     db.close()
     return bills
 
+@router.get("/user/me")
+def get_current_user_info(current_user: models.User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "name": current_user.name
+    }
+
 @celery_app.task(name="app.tasks.sync_gmail_inbox")
 def sync_gmail_inbox(user_id: int):
     logger.info(f"Starting Gmail sync for user ID {user_id}")
