@@ -17,3 +17,4 @@ loguru
 pydantic-settings
 azure-identity
 azure-keyvault-secrets
+tenacity
